@@ -59,7 +59,6 @@ import {
     setAudioOutputDeviceId,
     updateDeviceList
 } from './react/features/base/devices';
-import { isIosMobileBrowser } from './react/features/base/environment/utils';
 import {
     browser,
     isFatalJitsiConnectionError,
@@ -134,7 +133,7 @@ import {
 } from './react/features/prejoin';
 import { disableReceiver, stopReceiver } from './react/features/remote-control';
 import { setScreenAudioShareState, isScreenAudioShared } from './react/features/screen-share/';
-import { toggleScreenshotCaptureEffect } from './react/features/screenshot-capture';
+import { toggleScreenshotCaptureSummary } from './react/features/screenshot-capture';
 import { AudioMixerEffect } from './react/features/stream-effects/audio-mixer/AudioMixerEffect';
 import { createPresenterEffect } from './react/features/stream-effects/presenter';
 import { createRnnoiseProcessor } from './react/features/stream-effects/rnnoise';
@@ -835,9 +834,9 @@ export default {
         this._initDeviceList(true);
 
         if (initialOptions.startWithAudioMuted) {
-            // Always add the audio track to the peer connection and then mute the track on mobile Safari
-            // because of a known issue where audio playout doesn't happen if the user joins audio and video muted.
-            if (isIosMobileBrowser()) {
+            // Always add the track on Safari because of a known issue where audio playout doesn't happen
+            // if the user joins audio and video muted, i.e., if there is no local media capture.
+            if (browser.isWebKitBased()) {
                 this.muteAudio(true, true);
             } else {
                 localTracks = localTracks.filter(track => track.getType() !== MEDIA_TYPE.AUDIO);
@@ -1357,8 +1356,8 @@ export default {
                 APP.conference.roomName,
                 this._getConferenceOptions());
 
-        // Filter out the tracks that are muted (except on mobile Safari).
-        const tracks = isIosMobileBrowser() ? localTracks : localTracks.filter(track => !track.isMuted());
+        // Filter out the tracks that are muted (except on Safari).
+        const tracks = browser.isWebKitBased() ? localTracks : localTracks.filter(track => !track.isMuted());
 
         this._setLocalAudioVideoStreams(tracks);
         this._room = room; // FIXME do not use this
@@ -1545,8 +1544,9 @@ export default {
         APP.store.dispatch(stopReceiver());
 
         this._stopProxyConnection();
+
         if (config.enableScreenshotCapture) {
-            APP.store.dispatch(toggleScreenshotCaptureEffect(false));
+            APP.store.dispatch(toggleScreenshotCaptureSummary(false));
         }
 
         // It can happen that presenter GUM is in progress while screensharing is being turned off. Here it needs to
@@ -1924,7 +1924,7 @@ export default {
             .then(() => {
                 this.videoSwitchInProgress = false;
                 if (config.enableScreenshotCapture) {
-                    APP.store.dispatch(toggleScreenshotCaptureEffect(true));
+                    APP.store.dispatch(toggleScreenshotCaptureSummary(true));
                 }
                 sendAnalytics(createScreenSharingEvent('started'));
                 logger.log('Screen sharing started');
@@ -2294,9 +2294,9 @@ export default {
 
             // Remove the tracks from the peerconnection.
             for (const track of localTracks) {
-                // Always add the track on mobile Safari because of a known issue where audio playout doesn't happen
-                // if the user joins audio and video muted.
-                if (audioMuted && track.jitsiTrack?.getType() === MEDIA_TYPE.AUDIO && !isIosMobileBrowser()) {
+                // Always add the track on Safari because of a known issue where audio playout doesn't happen
+                // if the user joins audio and video muted, i.e., if there is no local media capture.
+                if (audioMuted && track.jitsiTrack?.getType() === MEDIA_TYPE.AUDIO && !browser.isWebKitBased()) {
                     promises.push(this.useAudioStream(null));
                 }
                 if (videoMuted && track.jitsiTrack?.getType() === MEDIA_TYPE.VIDEO) {
